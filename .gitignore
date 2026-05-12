@@ -18,3 +18,8 @@ node_modules/
 # Generated adapter files (not source)
 .claude/
 .codex/
+
+# Curator runtime state
+.curator_state
+.usage.json
+.curator_backups/

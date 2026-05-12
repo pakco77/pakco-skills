@@ -1,0 +1,6 @@
+[submodule "huashu-md-html"]
+	path = huashu-md-html
+	url = https://github.com/alchaincyf/huashu-md-html.git
+[submodule "software-development/skill-reviewer"]
+	path = software-development/skill-reviewer
+	url = git@github.com:pakco77/skill-reviewer.git

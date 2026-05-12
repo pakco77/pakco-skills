@@ -125,6 +125,79 @@ No extra fields. The key must be the real key, not a masked/truncated display va
 - **Platform path**: Windows paths differ from macOS/Linux. Use `%USERPROFILE%` on Windows, `~` on macOS/Linux.
 - **wire_api mismatch**: If the provider doesn't support the Responses API, change `wire_api` to `"chat_completions"`. Try `"responses"` first; if chat requests fail, switch to `"chat_completions"`.
 
+### Reverting to Native OpenAI
+
+To switch Codex back from a third-party provider to OpenAI's native API:
+
+1. **Exit Codex** entirely.
+2. **Backup** `config.toml` (timestamped).
+3. **Remove** three items from `config.toml`:
+   - The `model = "..."` line (third-party model name; native Codex picks its own default)
+   - The `model_provider = "..."` line
+   - The entire `[model_providers.<name>]` block (header + all key-value lines)
+4. **Do NOT touch `auth.json`** — if it already has valid OpenAI OAuth tokens
+   (native `auth_mode: chatgpt` with `id_token`/`access_token`), those still work.
+   Only change `auth.json` if it was populated with a third-party `OPENAI_API_KEY`
+   that needs removal.
+5. **Restart** Codex — old conversations will appear filtered by
+   `model_provider`.  See \"Conversation Recovery\" below to unhide them.
+
+### Conversation Recovery After Provider Switch
+
+Codex stores conversation metadata in `~/.codex/state_5.sqlite` (table
+`threads`).  Each thread records the `model_provider` it was created with.
+After switching providers, Codex filters the conversation list to only show
+threads whose `model_provider` matches the current config — **old
+conversations are not deleted, just hidden in the UI**.
+
+To recover conversations from the old provider:
+
+1. **Backup** the database first:
+
+   ```bash
+   cd ~/.codex
+   cp state_5.sqlite "state_5.sqlite.bak-$(date +%Y%m%d-%H%M%S)"
+   ```
+
+2. **Audit** how many threads use each provider:
+
+   ```bash
+   python3 -c "
+   import sqlite3
+   conn = sqlite3.connect('$HOME/.codex/state_5.sqlite')
+   for r in conn.execute('SELECT model_provider, COUNT(*) FROM threads GROUP BY 1'):
+       print(f'{r[0]}: {r[1]} threads')
+   conn.close()
+   "
+   ```
+
+3. **Migrate** old threads to the current provider.  Also clear the `model`
+   column (the old model name likely doesn't exist on the new provider, and
+   setting it NULL lets Codex pick its default):
+
+   ```bash
+   python3 -c "
+   import sqlite3
+   conn = sqlite3.connect('$HOME/.codex/state_5.sqlite')
+   conn.execute(\"UPDATE threads SET model_provider='openai', model=NULL WHERE model_provider='apicat'\")
+   conn.commit()
+   print(f'Updated {conn.total_changes} threads')
+   conn.close()
+   "
+   ```
+
+   Replace `'apicat'` with the old provider name and `'openai'` with the
+   target provider.  For a full schema reference see
+   `references/state-db-schema.md`.
+
+4. **Restart** Codex — all conversations should reappear.
+
+When using `patch` to edit TOML configs, be precise with `old_string`: include
+enough surrounding context for uniqueness, and validate the file after each
+patch step. If a patch replaces the wrong block (e.g. merging `[features]` into
+`[marketplaces]`), restore from backup immediately and redo with more specific
+anchors.
+
 ### Known‑good reference
 
 See `references/zeoapi-config.md` for a concrete, tested configuration against
